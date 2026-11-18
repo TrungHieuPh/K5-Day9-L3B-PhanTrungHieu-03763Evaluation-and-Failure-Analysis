@@ -7,6 +7,8 @@ Reference values to self-check are in tests/test_lab9_stats.py.
 
 from __future__ import annotations
 
+import math
+import numbers
 from collections.abc import Sequence
 
 POS = "FAIL"   # the judge's job is to FIND failures, so FAIL is the positive class
@@ -94,13 +96,27 @@ def paired_bootstrap(a: Sequence[float], b: Sequence[float], *, n_resamples: int
 def pass_at_k(n: int, c: int, k: int) -> float:
     """Probability that AT LEAST ONE of k trials drawn from n (c of them passing) passes.
     Unbiased estimator (Chen et al. 2021): 1 - C(n-c, k) / C(n, k). Raise ValueError if k > n."""
-    # TODO M6
-    raise NotImplementedError
+    _check_nck(n, c, k)
+    if n - c < k:
+        return 1.0          # fewer than k failing trials: any k-draw must contain a pass
+    return 1.0 - math.comb(n - c, k) / math.comb(n, k)
 
 
 def pass_hat_k(n: int, c: int, k: int) -> float:
     """pass^k (tau-bench, Yao et al. 2024): probability that ALL k trials drawn from n pass.
     Unbiased estimator: C(c, k) / C(n, k). Raise ValueError if k > n.
     pass^k <= pass@1 <= pass@k; a reliable agent keeps pass^k close to pass@1."""
-    # TODO M6
-    raise NotImplementedError
+    _check_nck(n, c, k)
+    return math.comb(c, k) / math.comb(n, k)    # comb(c, k) == 0 when c < k: cannot draw k passes
+
+
+def _check_nck(n: int, c: int, k: int) -> None:
+    """n trials, c of them passing, draw k. Anything else is a bug in the caller, not a 0 or a 1."""
+    if not all(isinstance(x, numbers.Integral) and not isinstance(x, bool) for x in (n, c, k)):
+        raise ValueError(f"n, c, k must be integers, got {(n, c, k)!r}")
+    if n <= 0:
+        raise ValueError(f"n must be >= 1, got {n}")
+    if not 0 <= c <= n:
+        raise ValueError(f"c must be in [0, n], got c={c}, n={n}")
+    if not 1 <= k <= n:
+        raise ValueError(f"k must be in [1, n], got k={k}, n={n}")

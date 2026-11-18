@@ -71,10 +71,11 @@ Quy tắc: tiền và phê duyệt luôn chấm bằng code. Judge chỉ dùng c
 
 ## 6. Bằng chứng còn thiếu / rủi ro mở
 - [ ] Chưa có dữ liệu người dùng thật; MockLLM không đại diện cho model thật (tất định theo seed, A/A Δ = 0).
-- [ ] 14 item: CI rộng, chỉ bắt được hồi quy lớn. Bug 1/5 seed (`flaky_regression`) chưa bị chặn ổn định; cần `pass_hat_5` (M6).
+- [x] 14 item: CI rộng, chỉ bắt được hồi quy lớn. Bug 1/5 seed (`flaky_regression`) chưa bị chặn ổn định. **Đã xử lý ở v2:** `pass_hat_5` ≥ 0.85 chặn `flaky_regression` (0.5714). Vẫn cần ≥ 2 item lỗi kiểu này mới bị chặn (xem eval card).
 - [ ] Judge replay trên CSV đã công khai, chưa có tập held-out mới sau khi sửa rubric.
 - [ ] FM-09 chưa có trace lỗi thật để kiểm chứng grader.
-- [ ] Chưa có gate theo slice (`money_movement`): một hồi quy nhỏ trên nhóm có tiền có thể bị trung bình che mất (M5).
+- [x] Chưa có gate theo slice (`money_movement`): một hồi quy nhỏ trên nhóm có tiền có thể bị trung bình che mất. **Đã xử lý ở v2:** slice money_movement ≥ 0.95 chặn `slice_regression` (0.85), dù gate tổng vẫn qua.
+- [x] Report bị "làm đẹp" (bỏ row, chọn seed, NaN, nới ngưỡng). **Đã xử lý:** `integrity_check` + `lab9.traps` chặn 4/4 trap (M7).
 - [ ] `reply_matches_ledger` không đọc được số tiền viết bằng chữ.
 
 ## 7. Khi nào lên v1.2
