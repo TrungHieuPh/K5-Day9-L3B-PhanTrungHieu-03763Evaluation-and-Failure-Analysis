@@ -84,6 +84,58 @@ Xem `docs/trace_case.md`: `seeded_regression C-002@11`.
 - Không đo trên người dùng thật. Chưa đo độ hài lòng của khách, cũng chưa đo độ trễ thật.
 - `reply_matches_ledger` dùng regex số tiền tiếng Việt ("35.000đ", "35000 VND"). Reply viết số bằng chữ ("ba mươi lăm nghìn") sẽ lọt grader.
 
+## v2 (Advanced: M5–M7)
+- **Eval set v2:** 28 item × 5 seed = 140 trial. Gồm v1 cộng 14 item adversarial C-101…C-114. Sha **`4965f1e7a9b3`**, spec `config/metric_spec_v2.yaml`.
+- **Baseline v2:** `E-swarm-20261118-4965` (`reports/baseline_v2.json`).
+  - pass_rate 0.9786, refund_amount_correct 0.9786, reply_matches_ledger 1.0.
+  - pass_hat_5 0.8929, cost_per_success 50.8077.
+- **Slice tag** lấy từ nhãn (`labels_v2.json`), không inline:
+  - money_movement: 12 item.
+  - adversarial: 14 item.
+  - denial: 11 item.
+
+### Slice nào bắt bug nào (`python -m lab9.mutation`, scorecard 3/3, báo nhầm 0)
+| Shape | Gate tổng | Bị chặn bởi |
+|---|---|---|
+| fixed, honest_refactor | merge | (không) |
+| slice_regression | pass_rate 0.9357, Δ −0.043 CI [−0.121, +0.029]: **ok** | **chỉ slice** `money_movement/pass_rate` 0.85 và `money_movement/refund_amount_correct` 0.85 (sàn 0.95) |
+| flaky_regression | pass_rate 0.9143 | `pass_hat_5` 0.5714 (sàn 0.85), `pass_rate` (CI [−0.114, −0.014]), slice money_movement |
+| seeded_regression | nhiều metric dưới sàn | gần như mọi metric và slice |
+
+`slice_regression` là lý do cần slice gate. Bug chỉ nằm ở nhóm có tiền: 9 trial hỏng trên 140 vẫn cho trung bình 94%, qua được gate tổng. Nhưng 9 trial hỏng trên 60 trial money thì slice chỉ còn 85%, dưới sàn 95%, nên bị chặn.
+
+### Ngưỡng chọn từ A/A
+- Chạy `lab9.mutation --aa 66,77,88,99,110`: cùng agent `swarm`, bộ seed khác, Δ = **0.0000** trên mọi metric (MockLLM tất định).
+- Vì vậy các sàn v2 (pass_hat_5 ≥ 0.85, slice money ≥ 0.95, adversarial/denial ≥ 0.90) đặt ngay dưới giá trị baseline. Không shape nào hợp lệ (`fixed`, `honest_refactor`) bị báo nhầm.
+- **Với LLM thật** thì A/A sẽ có nhiễu > 0. Khi đó sàn phải đặt **ngoài** dải nhiễu A/A, nếu không gate sẽ đỏ ngẫu nhiên trên PR không đổi gì. Phải đo lại A/A trước khi dùng những sàn này.
+
+### Giới hạn cỡ mẫu
+- Bug chỉ hỏng ở 1/5 seed của **một** item làm pass_rate giảm 1/140 ≈ 0.007, không có gate trung bình nào thấy được.
+- `pass_hat_5` nhạy hơn: item đó tụt pass^5 từ 1 xuống 0, nên pass_hat_5 giảm 1/28 ≈ 0.036.
+  - Từ baseline 0.8929, một item như vậy còn 0.857 (vẫn qua sàn 0.85).
+  - **Cần ≥ 2 item** như vậy mới bị chặn.
+- Bug `rare` (khoảng 1/3 seed) với 5 seed có xác suất (2/3)^5 ≈ 13% không lộ ra ở seed nào của một item. Muốn chắc chắn hơn thì cần thêm seed hoặc thêm item.
+
+### Integrity (M7)
+Trước khi so metric, `gate.integrity_check` từ chối report đã bị "làm đẹp". Lệnh `python -m lab9.traps` chặn cả 4 trap công khai:
+
+| Trap | Bị bắt vì |
+|---|---|
+| evaluator_errors_as_nan | row có giá trị `None` cho metric được chấm (grader crash bị bỏ khỏi trung bình) |
+| dropped_failing_rows | tập (item, seed) khác baseline: thiếu 9 row |
+| cherry_picked_seeds | seeds [22, 44] khác baseline/spec [11, 22, 33, 44, 55] |
+| loosened_spec | RATCHET: hạ min, bỏ `no_significant_drop`, xoá slice trên cùng eval-set v2 |
+
+Ngoài 4 trap trên, gate còn kiểm:
+- metric NaN hoặc inf;
+- số row khác items × seeds;
+- row trùng (item, seed);
+- `evaluator_failures` khác rỗng;
+- metric trong report khác với giá trị tính lại từ rows (bị sửa tay);
+- slice tag khác baseline;
+- metric, slice hoặc blocking bị gỡ bỏ;
+- seeds hoặc bootstrap bị đổi.
+
 ## Khi nào tăng eval-set version
 - Khi thêm item (ví dụ biến trace case thành item có `provenance.from_trace`, hoặc thêm adversarial pack cho M5), đổi nhãn, hoặc đổi seed: tăng `eval_set_version` (v1 → v2) và **chạy lại baseline** trên main. Gate tự từ chối so report có `eval_set_sha` khác nhau.
 - Trên **cùng** một version, ngưỡng chỉ được siết chặt hơn (ratchet), không được nới. Khi đổi metric hay ngưỡng thì tăng `metric_spec_version` và ghi lý do vào PRD.
